@@ -20,14 +20,23 @@ impl Vec3 {
     }
 
     pub fn zero() -> Vec3 {
-        Vec3{
+        Vec3 {
             x: 0.0,
             y: 0.0,
-            z: 0.0
+            z: 0.0,
         }
     }
+    fn x(&self) -> f64 {
+        return self.x;
+    }
     pub fn y(&self) -> f64 {
-        return self.y
+        return self.y;
+    }
+    fn z(&self) -> f64 {
+        return self.z;
+    }
+    pub fn dot(v1: Vec3, v2: Vec3) -> f64 {
+        v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z()
     }
 }
 
