@@ -1,5 +1,6 @@
 use crate::color::Color;
 use vec3::Vec3;
+use image::{ImageBuffer, Rgb};
 
 mod color;
 mod vec3;
@@ -17,12 +18,14 @@ struct Sensor {
     vertical: Vec3,
     lower_left_corner: Vec3,
 }
+
 impl Sensor {
     fn new(height: f64, aspect_ratio: f64, focal_length: f64) -> Sensor {
         let origin = Vec3::zero();
         let width = aspect_ratio * height;
         let horizontal = Vec3::new(width, 0., 0.);
         let vertical = Vec3::new(0., height, 0.);
+        
         Sensor {
             height,
             width,
@@ -33,15 +36,19 @@ impl Sensor {
             lower_left_corner: &origin - &(&horizontal / 2.0) - &vertical / 2.0 - Vec3::new(0., 0., focal_length),
         }
     }
+
     fn lower_left_corner(&self) -> &Vec3 {
         &self.lower_left_corner
     }
+
     fn horizontal(&self) -> &Vec3 {
         &self.horizontal
     }
+
     fn vertical(&self) -> &Vec3 {
         &self.vertical
     }
+
     fn origin(&self) -> &Vec3 {
         &self.origin
     }
@@ -51,15 +58,16 @@ impl Sensor {
 struct Image {
     aspect_ratio: f64,
     width: u32,
-    height: u32
+    height: u32,
 }
+
 impl Image {
     fn new(width: u32, aspect_ratio: f64) -> Image {
         let aspect_ratio = aspect_ratio;
         Image {
             aspect_ratio,
             width,
-            height: (width as f64 / aspect_ratio) as u32
+            height: (width as f64 / aspect_ratio) as u32,
         }
     }
 }
@@ -71,20 +79,25 @@ struct Ray {
     origin: Vec3,
     direction: Vec3,
 }
+
 impl Ray {
     fn new(origin: Vec3, direction: Vec3) -> Ray {
         Ray { origin, direction }
     }
+
     /// Get value of point `P(t) = A + direction * t`
     fn at(&self, t: f64) -> Vec3 {
         &self.origin + &(t * &self.direction)
     }
+
     fn unit_vector(&self) -> Vec3 {
         &self.direction / self.direction.length()
     }
+
     fn direction(&self) -> Vec3 {
         self.direction.clone()
     }
+
     fn origin(&self) -> Vec3 {
         self.origin.clone()
     }
@@ -93,48 +106,48 @@ impl Ray {
 // Represents ray traced object: sphere
 struct Sphere {
     center: Vec3,
-    radius: f64
+    radius: f64,
 }
+
 impl Sphere {
-    fn new(center: Vec3, radius: f64) -> Sphere{
+    fn new(center: Vec3, radius: f64) -> Sphere {
         Sphere { center, radius }
     }
 }
 
 pub fn run() {
-    // There are values hardcoded into this program, so if you want to change any of these values (image
-    // or camera_viewport fields), go through the calculations to make sure it will render the image correctly.
     let image = Image::new(400, 16.0 / 9.0);
-    let camera_viewport = Sensor::new( 2.0, image.aspect_ratio, 1.0);
+    let camera_viewport = Sensor::new(2.0, image.aspect_ratio, 1.0);
 
-    // The image format we're using is ppm. More info: https://en.wikipedia.org/wiki/Netpbm#PPM_example
-    // Print header of the PPM image
-    const MAX_COLOR: u16 = 256;
-    println!("P3\n{} {}\n{}\n", image.width, image.height, MAX_COLOR);
+    let image_buffer = calculate_image(&camera_viewport, &image);
+    save_image(&image_buffer);
+}
 
-    // Transversing the image pixels from the lower left hand corner, and using two offset vectors
-    // `u` and `v` to convert the image pixel location to a fraction from 0 to 1, so that we can use
-    // them when creating the ray which gets calculated from the virtual viewport location
-    // of a pixel (virtual viewport is later scaled and saved as the image).
-    for h in 0..image.height {
-        eprintln!("Remaining lines: {}", image.height - h);
-        for w in 0..image.width {
-            let u: f64 = w as f64 / (image.width as f64 - 1.0);
-            let v : f64= h as f64 / (image.height as f64 - 1.0);
+// Iterate over every pixel in the image, use two offset vectors `u` and `v` to convert
+// the image pixel location to a fraction from 0 to 1, so that we can use them when
+// creating the ray which gets calculated from the virtual viewport location
+// of a pixel (virtual viewport is later scaled and saved as the image).
+fn calculate_image(camera_viewport: &Sensor, image: &Image) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+    let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
+    for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
+        let u: f64 = x as f64 / (image.width as f64 - 1.0);
+        let v: f64 = y as f64 / (image.height as f64 - 1.0);
 
-            let ray = calculate_the_ray(u, v, &camera_viewport);
-            let color = calculate_color_for_this_point(ray);
-            color.write();
-        }
-        // PPM formatting -> each line of pixels ends with new line character
-        println!();
+        let ray = calculate_ray(u, v, &camera_viewport);
+        let color = calculate_color(ray);
+        // Rgb is struct holding array of three elements
+        *pixel = image::Rgb([color.r(), color.g(), color.b()]);
     }
-    eprintln!("Done");
+    image_buffer
+}
+
+fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
+    image_buffer.save("image.png").unwrap();
 }
 
 // The ray goes from origin to the pixel in the virtual viewport which is specified by offset
 // vectors `u` and `v`.
-fn calculate_the_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
+fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
     Ray::new(
         camera_viewport.origin,
         &(&camera_viewport.lower_left_corner + &(u as f64 * &camera_viewport.horizontal))
@@ -142,11 +155,11 @@ fn calculate_the_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
     )
 }
 
-/// If ray hits the sphere, return red color, else return background color
-fn calculate_color_for_this_point(ray: Ray) -> Color {
+// If ray hits the sphere, return red color, else return background color
+fn calculate_color(ray: Ray) -> Color {
     if hit_sphere(
         &ray,
-        Sphere::new(Vec3::new(0., 0., -1.), 0.5)
+        Sphere::new(Vec3::new(0., 0., -1.), 0.5),
     ) {
         Color::from_fraction(1., 0., 0.).unwrap()
     } else {
@@ -165,15 +178,15 @@ fn hit_sphere(ray: &Ray, sphere: Sphere) -> bool {
     // oc = line segment between origin and center
     let oc = ray.origin() - sphere.center;
     let a = Vec3::dot(ray.direction(), ray.direction());
-    let b = 2.0 * Vec3::dot(ray.direction(), oc );
+    let b = 2.0 * Vec3::dot(ray.direction(), oc);
     let c = Vec3::dot(oc, oc) - sphere.radius * sphere.radius;
     let discriminant = b * b - 4. * a * c;
     discriminant > 0.0
 }
 
-/// Linearly blend white and blue depending on the y coordinate. Because we normalize the vector
-/// (we transform it to the unit vector), it changes shade even based on the x coordinate (as we
-/// change value of y, the value of x has to change too).
+// Linearly blend white and blue depending on the y coordinate. Because we normalize the vector
+// (we transform it to the unit vector), it changes shade even based on the x coordinate (as we
+// change value of y, the value of x has to change too).
 fn generate_background_color(r: Ray) -> Color {
     let unit_direction: Vec3 = r.unit_vector();
 

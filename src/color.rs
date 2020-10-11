@@ -10,6 +10,7 @@ impl Color {
         Color { r, g, b }
     }
 
+    // Returns None if any of the arguments is larger than 1
     pub fn from_fraction(r: f64, g: f64, b: f64) -> Option<Color> {
         if r > 1. || r < 0. || g > 1. || g < 0. || b > 1. || b < 0. {
             None
