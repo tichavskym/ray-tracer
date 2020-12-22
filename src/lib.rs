@@ -1,6 +1,6 @@
 use crate::color::Color;
-use vec3::Vec3;
 use image::{ImageBuffer, Rgb};
+use vec3::Vec3;
 
 mod color;
 mod vec3;
@@ -25,7 +25,7 @@ impl Sensor {
         let width = aspect_ratio * height;
         let horizontal = Vec3::new(width, 0., 0.);
         let vertical = Vec3::new(0., height, 0.);
-        
+
         Sensor {
             height,
             width,
@@ -33,7 +33,10 @@ impl Sensor {
             origin,
             horizontal,
             vertical,
-            lower_left_corner: &origin - &(&horizontal / 2.0) - &vertical / 2.0 - Vec3::new(0., 0., focal_length),
+            lower_left_corner: &origin
+                - &(&horizontal / 2.0)
+                - &vertical / 2.0
+                - Vec3::new(0., 0., focal_length),
         }
     }
 
@@ -155,13 +158,20 @@ fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
     )
 }
 
-// If ray hits the sphere, return red color, else return background color
+// If ray hits the sphere, return color based on the surface normal vector of the collision 
+// point on sphere or background
 fn calculate_color(ray: Ray) -> Color {
     let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
-    if hit_sphere(&ray, &sphere).is_some() {
-        Color::from_fraction(1., 0., 0.).unwrap()
-    } else {
-        generate_background_color(ray)
+    match hit_sphere(&ray, &sphere) {
+        Some(collision_point) => {
+            // Sphere's normal vector represented as ray with origin in zero
+            // So that I can simply create unit vector out of it
+            let vec = Ray::new(Vec3::zero(), collision_point - sphere.center);
+            let n = vec.unit_vector();
+            // from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
+            return Color::from_fraction((n.x()+1.)/2., (n.y()+1.)/2., (n.z()+1.)/2.).unwrap()
+        },
+        None => generate_background_color(ray)
     }
 }
 
@@ -184,7 +194,7 @@ fn hit_sphere(ray: &Ray, sphere: &Sphere) -> Option<Vec3> {
     let discriminant = b * b - 4. * a * c;
     if discriminant > 0.0 {
         // Going with smaller parameter for now, which should be closer to the camera.
-        let parameter = - b - discriminant.sqrt() / (2.0*a);
+        let parameter = (- b - discriminant.sqrt()) / (2.0*a);
         return Some(ray.at(parameter));
     } else {
         return None;
