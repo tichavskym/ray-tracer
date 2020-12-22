@@ -26,7 +26,7 @@ impl Vec3 {
             z: 0.0,
         }
     }
-    
+
     pub fn x(&self) -> f64 {
         return self.x;
     }
@@ -116,6 +116,19 @@ impl std::ops::Div<f64> for &Vec3 {
             x: &self.x / rhs,
             y: &self.y / rhs,
             z: &self.z / rhs,
+        }
+    }
+}
+
+// Make vector negative
+impl std::ops::Neg for Vec3 {
+    type Output = Vec3;
+
+    fn neg(self) -> Self::Output {
+        Vec3 {
+            x: -self.x,
+            y: -self.y,
+            z: -self.z,
         }
     }
 }
