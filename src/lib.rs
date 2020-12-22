@@ -106,6 +106,46 @@ impl Ray {
     }
 }
 
+// Stores information about intersection of ray and the object.
+struct HitRecord {
+    // Point of intersection.
+    point: Vec3,
+    // Normal surface vector at the point of intersection.
+    normal: Vec3,
+    // Parameter that says where on the ray the intersection happend.
+    t: f64,
+    // True means the ray hit the object from the outside, false from the inside.
+    front_face: bool,
+}
+
+impl HitRecord {
+    // Sets default values so that copiler is satisfied. SHOULD BE REWRITTEN if you wanna meaningfully use it.
+    fn new() -> HitRecord {
+        HitRecord {
+            point: Vec3::zero(),
+            normal: Vec3::zero(),
+            t: 0.0,
+            front_face: true,
+        }
+    }
+
+    // Set `front_face` and if it's false (ray is inside of the object), it makes
+    // the normal vector negative, so that it in the direction agains the ray.
+    fn set_face_normal(&mut self, ray: &Ray, outward_normal: Vec3) {
+        self.front_face = Vec3::dot(ray.direction(), outward_normal) > 0.0;
+        self.normal = if self.front_face {
+            outward_normal
+        } else {
+            -outward_normal
+        };
+    }
+}
+
+trait Hittable {
+    /// Hit only counts if it's from interval (t_min, t_min).
+    fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
+}
+
 // Represents ray traced object: sphere
 struct Sphere {
     center: Vec3,
@@ -118,10 +158,52 @@ impl Sphere {
     }
 }
 
+impl Hittable for Sphere {
+    // Return true if sphere and ray intersect, data about point closer to the camera are saved
+    // into `HitRecord` struct.
+    //
+    // There is a quadratic equation that describes spacial geometry containing ray and sphere.
+    // If the equation has one (discriminant = 0) or two roots (discr > 0), the ray touches or
+    // intersects the sphere, respectively. The exact equation and
+    // more thorough explanation can be found at:
+    // https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere
+    //
+    // We're not interested in one root, bcs the ray would most likely reflect somewhere else.
+    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
+        // oc = line segment between origin and center
+        let oc = ray.origin() - self.center;
+        let a = Vec3::dot(ray.direction(), ray.direction());
+        let b = 2.0 * Vec3::dot(ray.direction(), oc);
+        let c = Vec3::dot(oc, oc) - self.radius * self.radius;
+
+        let discriminant = b * b - 4. * a * c;
+        if discriminant < 0.0 {
+            return false;
+        }
+
+        let mut root = (-b - discriminant.sqrt()) / (2.0 * a);
+        if root < t_min || t_max < root {
+            root = (-b + discriminant.sqrt()) / (2.0 * a);
+            if root < t_min || t_max < root {
+                return false;
+            }
+        }
+
+        rec.t = root;
+        rec.point = ray.at(rec.t);
+        rec.normal = (rec.point - self.center) / self.radius;
+
+        return true;
+    }
+}
+
 pub fn run() {
     let image = Image::new(400, 16.0 / 9.0);
     let camera_viewport = Sensor::new(2.0, image.aspect_ratio, 1.0);
 
+    // let v: Vec<Box<dyn Hittable>> = Vec::new();
+    // let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
+    // v.push(Box::new(sphere));
     let image_buffer = calculate_image(&camera_viewport, &image);
     save_image(&image_buffer);
 }
@@ -131,13 +213,14 @@ pub fn run() {
 // creating the ray which gets calculated from the virtual viewport location
 // of a pixel (virtual viewport is later scaled and saved as the image).
 fn calculate_image(camera_viewport: &Sensor, image: &Image) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
         let u: f64 = x as f64 / (image.width as f64 - 1.0);
         let v: f64 = y as f64 / (image.height as f64 - 1.0);
 
         let ray = calculate_ray(u, v, &camera_viewport);
-        let color = calculate_color(ray);
+        let color = calculate_color(ray, &sphere);
         // Rgb is struct holding array of three elements
         *pixel = image::Rgb([color.r(), color.g(), color.b()]);
     }
@@ -154,50 +237,22 @@ fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
     Ray::new(
         camera_viewport.origin,
         &(&camera_viewport.lower_left_corner + &(u as f64 * &camera_viewport.horizontal))
-            + &(v as f64 * &camera_viewport.vertical) - camera_viewport.origin,
+            + &(v as f64 * &camera_viewport.vertical)
+            - camera_viewport.origin,
     )
 }
 
-// If ray hits the sphere, return color based on the surface normal vector of the collision 
+// If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
-fn calculate_color(ray: Ray) -> Color {
-    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
-    match hit_sphere(&ray, &sphere) {
-        Some(collision_point) => {
-            // Sphere's normal vector represented as ray with origin in zero
-            // So that I can simply create unit vector out of it
-            let vec = Ray::new(Vec3::zero(), collision_point - sphere.center);
-            let n = vec.unit_vector();
-            // from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
-            return Color::from_fraction((n.x()+1.)/2., (n.y()+1.)/2., (n.z()+1.)/2.).unwrap()
-        },
-        None => generate_background_color(ray)
-    }
-}
-
-// Returns point of a collision between ray and sphere wrapped in an Option.
-//
-// There is a quadratic equation that describes spacial geometry containing ray and sphere.
-// If the equation has one (discriminant = 0) or two roots (discr > 0), the ray touches or 
-// intersects the sphere, respectively. The exact equation and
-// more thorough explanation can be found at:
-// https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere
-//
-// We're not interested in one root, bcs the ray would most likely reflect somewhere else
-// afaik. I just trust the author of this book that we should ignore it.
-fn hit_sphere(ray: &Ray, sphere: &Sphere) -> Option<Vec3> {
-    // oc = line segment between origin and center
-    let oc = ray.origin() - sphere.center;
-    let a = Vec3::dot(ray.direction(), ray.direction());
-    let b = 2.0 * Vec3::dot(ray.direction(), oc);
-    let c = Vec3::dot(oc, oc) - sphere.radius * sphere.radius;
-    let discriminant = b * b - 4. * a * c;
-    if discriminant > 0.0 {
-        // Going with smaller parameter for now, which should be closer to the camera.
-        let parameter = (- b - discriminant.sqrt()) / (2.0*a);
-        return Some(ray.at(parameter));
+fn calculate_color(ray: Ray, sphere: &Sphere) -> Color {
+    let mut rec: HitRecord = HitRecord::new();
+    if sphere.hit(&ray, 0., 2000., &mut rec) {
+        let n = rec.normal;
+        // Transformation from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
+        return Color::from_fraction((n.x() + 1.) / 2., (n.y() + 1.) / 2., (n.z() + 1.) / 2.)
+            .unwrap();
     } else {
-        return None;
+        generate_background_color(ray)
     }
 }
 
