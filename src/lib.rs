@@ -157,31 +157,38 @@ fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
 
 // If ray hits the sphere, return red color, else return background color
 fn calculate_color(ray: Ray) -> Color {
-    if hit_sphere(
-        &ray,
-        Sphere::new(Vec3::new(0., 0., -1.), 0.5),
-    ) {
+    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
+    if hit_sphere(&ray, &sphere).is_some() {
         Color::from_fraction(1., 0., 0.).unwrap()
     } else {
         generate_background_color(ray)
     }
 }
 
-// There is quadratic equation that describes spacial geometry containing ray and sphere.
-// If the equation has one or two roots, the ray touches or intersects the sphere, respectively.
-// Equation has one root if discriminant = 0, two if discriminant > 0. The exact equation and
+// Returns point of a collision between ray and sphere wrapped in an Option.
+//
+// There is a quadratic equation that describes spacial geometry containing ray and sphere.
+// If the equation has one (discriminant = 0) or two roots (discr > 0), the ray touches or 
+// intersects the sphere, respectively. The exact equation and
 // more thorough explanation can be found at:
 // https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere
-// We're not interested in discriminant = 0, bcs the ray would most likely reflect somewhere else
+//
+// We're not interested in one root, bcs the ray would most likely reflect somewhere else
 // afaik. I just trust the author of this book that we should ignore it.
-fn hit_sphere(ray: &Ray, sphere: Sphere) -> bool {
+fn hit_sphere(ray: &Ray, sphere: &Sphere) -> Option<Vec3> {
     // oc = line segment between origin and center
     let oc = ray.origin() - sphere.center;
     let a = Vec3::dot(ray.direction(), ray.direction());
     let b = 2.0 * Vec3::dot(ray.direction(), oc);
     let c = Vec3::dot(oc, oc) - sphere.radius * sphere.radius;
     let discriminant = b * b - 4. * a * c;
-    discriminant > 0.0
+    if discriminant > 0.0 {
+        // Going with smaller parameter for now, which should be closer to the camera.
+        let parameter = - b - discriminant.sqrt() / (2.0*a);
+        return Some(ray.at(parameter));
+    } else {
+        return None;
+    }
 }
 
 // Linearly blend white and blue depending on the y coordinate. Because we normalize the vector
