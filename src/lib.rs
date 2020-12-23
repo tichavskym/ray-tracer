@@ -1,9 +1,12 @@
 use crate::color::Color;
 use image::{ImageBuffer, Rgb};
 use vec3::Vec3;
+use std::f64::consts::PI as PI;
 
 mod color;
 mod vec3;
+
+const INFINITY: f64 = f64::MAX;
 
 /// Image sensor (imager) parameters:
 /// `Focal length` is a distance between projection plane to projection point (origin).
