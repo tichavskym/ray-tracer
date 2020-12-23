@@ -269,5 +269,5 @@ fn generate_background_color(r: Ray) -> Color {
     let t = 0.5 * (unit_direction.y() + 1.0);
 
     // blendedValue = ( 1.0 - t ) startValue + t * endValue
-    (1.0 - t) * Color::blue() + t * Color::white()
+    (1.0 - t) * Color::white() + t * Color::blue()
 }
