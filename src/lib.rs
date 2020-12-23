@@ -278,3 +278,7 @@ fn generate_background_color(r: Ray) -> Color {
     // blendedValue = ( 1.0 - t ) startValue + t * endValue
     (1.0 - t) * Color::white() + t * Color::blue()
 }
+
+fn degrees_to_radians(degrees: f64) -> f64 {
+    degrees * PI / 180.0
+}
