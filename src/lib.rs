@@ -200,14 +200,21 @@ impl Hittable for Sphere {
     }
 }
 
+fn set_scene_objects(objects: &mut Vec<Box<dyn Hittable>>) {
+    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
+    objects.push(Box::new(sphere));
+    let sphere = Sphere::new(Vec3::new(0., -100.5, -1.), 100.);
+    objects.push(Box::new(sphere));
+}
+
 pub fn run() {
     let image = Image::new(400, 16.0 / 9.0);
     let camera_viewport = Sensor::new(2.0, image.aspect_ratio, 1.0);
 
-    // let v: Vec<Box<dyn Hittable>> = Vec::new();
-    // let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
-    // v.push(Box::new(sphere));
-    let image_buffer = calculate_image(&camera_viewport, &image);
+    let mut scene_objects: Vec<Box<dyn Hittable>> = Vec::new();
+    set_scene_objects(&mut scene_objects);
+
+    let image_buffer = calculate_image(&camera_viewport, &image, &scene_objects);
     save_image(&image_buffer);
 }
 
@@ -215,15 +222,14 @@ pub fn run() {
 // the image pixel location to a fraction from 0 to 1, so that we can use them when
 // creating the ray which gets calculated from the virtual viewport location
 // of a pixel (virtual viewport is later scaled and saved as the image).
-fn calculate_image(camera_viewport: &Sensor, image: &Image) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
-    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
+fn calculate_image(camera_viewport: &Sensor, image: &Image, scene_objects: &Vec<Box<dyn Hittable>>) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
         let u: f64 = x as f64 / (image.width as f64 - 1.0);
         let v: f64 = y as f64 / (image.height as f64 - 1.0);
 
         let ray = calculate_ray(u, v, &camera_viewport);
-        let color = calculate_color(ray, &sphere);
+        let color = calculate_color(ray, &scene_objects);
         // Rgb is struct holding array of three elements
         *pixel = image::Rgb([color.r(), color.g(), color.b()]);
     }
@@ -247,16 +253,17 @@ fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
 
 // If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
-fn calculate_color(ray: Ray, sphere: &Sphere) -> Color {
+fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>) -> Color {
     let mut rec: HitRecord = HitRecord::new();
-    if sphere.hit(&ray, 0., 2000., &mut rec) {
-        let n = rec.normal;
-        // Transformation from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
-        return Color::from_fraction((n.x() + 1.) / 2., (n.y() + 1.) / 2., (n.z() + 1.) / 2.)
+    for s in shapes {
+        if s.hit(&ray, 0., 2000., &mut rec) {
+            let n = rec.normal;
+            // Transformation from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
+            return Color::from_fraction((n.x() + 1.) / 2., (n.y() + 1.) / 2., (n.z() + 1.) / 2.)
             .unwrap();
-    } else {
-        generate_background_color(ray)
+        } 
     }
+    generate_background_color(ray)
 }
 
 // Linearly blend white and blue depending on the y coordinate. Because we normalize the vector
