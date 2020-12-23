@@ -226,7 +226,7 @@ fn calculate_image(camera_viewport: &Sensor, image: &Image, scene_objects: &Vec<
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
         let u: f64 = x as f64 / (image.width as f64 - 1.0);
-        let v: f64 = y as f64 / (image.height as f64 - 1.0);
+        let v: f64 = (image.height as f64 - 1. - y as f64) / (image.height as f64 - 1.0);
 
         let ray = calculate_ray(u, v, &camera_viewport);
         let color = calculate_color(ray, &scene_objects);
