@@ -1,5 +1,8 @@
-use crate::color::Color;
+use rand::{thread_rng, Rng};
+use rand::seq::index::sample;
 use image::{ImageBuffer, Rgb};
+
+use color::Color;
 use vec3::Vec3;
 use std::f64::consts::PI as PI;
 use camera::Sensor;
@@ -155,6 +158,23 @@ fn calculate_image(camera_viewport: &Sensor, image: &Image, scene_objects: &Vec<
         *pixel = image::Rgb([color.r(), color.g(), color.b()]);
     }
     image_buffer
+}
+
+// Returns random number in range from 0.0 (included) to 1.0 (excluded)
+fn random_double() -> f64 {
+    let mut rng = thread_rng();
+    rng.gen_range(0.0..1.0)
+}
+
+// Clamp value x to the range [min, max]
+fn clamp(x: f64, min: f64, max:f64) -> f64 {
+    if x < min {
+        return min;
+    }
+    if x > max {
+        return max;
+    }
+    return x;
 }
 
 fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
