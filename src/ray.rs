@@ -30,4 +30,3 @@ impl Ray {
         self.origin.clone()
     }
 }
-

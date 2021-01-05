@@ -48,6 +48,15 @@ impl Color {
     pub fn b(&self) -> u8 {
         self.b
     }
+
+    // Returns a tuple of floats that represents the color in terms of fraction from 0 to 1.
+    pub fn as_fraction(&self) -> (f64, f64, f64) {
+        (
+            self.r as f64 / 256.,
+            self.g as f64 / 256.,
+            self.b as f64 / 256.,
+        )
+    }
 }
 
 impl std::ops::Mul<Color> for f64 {

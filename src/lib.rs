@@ -1,19 +1,22 @@
-use rand::{thread_rng, Rng};
-use rand::seq::index::sample;
 use image::{ImageBuffer, Rgb};
+use rand::{thread_rng, Rng};
 
-use color::Color;
-use vec3::Vec3;
-use std::f64::consts::PI as PI;
 use camera::Sensor;
+use color::Color;
+use color_frac::Color as FColor;
 use ray::Ray;
+use std::f64::consts::PI;
+use vec3::Vec3;
+use vec3::Vec3 as Point;
 
-mod color;
-mod vec3;
 mod camera;
+mod color;
+mod color_frac;
 mod ray;
+mod vec3;
 
 const INFINITY: f64 = f64::MAX;
+const SAMPLES_PER_PIXEL: u16 = 50; // Antialiasing
 
 /// Holds information about the resulting image.
 struct Image {
@@ -146,16 +149,30 @@ pub fn run() {
 // the image pixel location to a fraction from 0 to 1, so that we can use them when
 // creating the ray which gets calculated from the virtual viewport location
 // of a pixel (virtual viewport is later scaled and saved as the image).
-fn calculate_image(camera_viewport: &Sensor, image: &Image, scene_objects: &Vec<Box<dyn Hittable>>) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+// The color of each pixel is computed multiple times (SAMPLES_PER_PIXEL times, every time with
+// random deviation) so that we get "white noise" and aliased picture is created. All of the colors
+// are added and then mathematically transformed into final color of the pixel.
+fn calculate_image(
+    cam: &Sensor,
+    image: &Image,
+    scene_objects: &Vec<Box<dyn Hittable>>,
+) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
-        let u: f64 = x as f64 / (image.width as f64 - 1.0);
-        let v: f64 = (image.height as f64 - 1. - y as f64) / (image.height as f64 - 1.0);
+        // Used for color sampling of the pixel.
+        let mut color = FColor::black();
+        for _ in 0..SAMPLES_PER_PIXEL {
+            let u: f64 = (x as f64 + random_double()) / (image.width as f64 - 1.0);
+            let v: f64 = (image.height as f64 - 1. - y as f64 + random_double())
+                / (image.height as f64 - 1.0);
 
-        let ray = camera_viewport.calculate_ray(u, v);
-        let color = calculate_color(ray, &scene_objects);
+            let ray = cam.calculate_ray(u, v);
+            let sample_color = calculate_color(ray, &scene_objects).as_fraction();
+            color.add_sample(sample_color);
+        }
+        color.combine_samples(SAMPLES_PER_PIXEL);
         // Rgb is struct holding array of three elements
-        *pixel = image::Rgb([color.r(), color.g(), color.b()]);
+        *pixel = image::Rgb(color.get_u8());
     }
     image_buffer
 }
@@ -166,21 +183,9 @@ fn random_double() -> f64 {
     rng.gen_range(0.0..1.0)
 }
 
-// Clamp value x to the range [min, max]
-fn clamp(x: f64, min: f64, max:f64) -> f64 {
-    if x < min {
-        return min;
-    }
-    if x > max {
-        return max;
-    }
-    return x;
-}
-
 fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
     image_buffer.save("image.png").unwrap();
 }
-
 
 // If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
