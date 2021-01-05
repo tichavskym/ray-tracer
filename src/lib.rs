@@ -2,63 +2,15 @@ use crate::color::Color;
 use image::{ImageBuffer, Rgb};
 use vec3::Vec3;
 use std::f64::consts::PI as PI;
+use camera::Sensor;
+use ray::Ray;
 
 mod color;
 mod vec3;
+mod camera;
+mod ray;
 
 const INFINITY: f64 = f64::MAX;
-
-/// Image sensor (imager) parameters:
-/// `Focal length` is a distance between projection plane to projection point (origin).
-/// `origin` and `lower_left_corner` together with `focal_length` give us spacial orientation of
-/// the virtual sensor.
-struct Sensor {
-    height: f64,
-    width: f64,
-    focal_length: f64,
-    origin: Vec3,
-    horizontal: Vec3,
-    vertical: Vec3,
-    lower_left_corner: Vec3,
-}
-
-impl Sensor {
-    fn new(height: f64, aspect_ratio: f64, focal_length: f64) -> Sensor {
-        let origin = Vec3::zero();
-        let width = aspect_ratio * height;
-        let horizontal = Vec3::new(width, 0., 0.);
-        let vertical = Vec3::new(0., height, 0.);
-
-        Sensor {
-            height,
-            width,
-            focal_length,
-            origin,
-            horizontal,
-            vertical,
-            lower_left_corner: &origin
-                - &(&horizontal / 2.0)
-                - &vertical / 2.0
-                - Vec3::new(0., 0., focal_length),
-        }
-    }
-
-    fn lower_left_corner(&self) -> &Vec3 {
-        &self.lower_left_corner
-    }
-
-    fn horizontal(&self) -> &Vec3 {
-        &self.horizontal
-    }
-
-    fn vertical(&self) -> &Vec3 {
-        &self.vertical
-    }
-
-    fn origin(&self) -> &Vec3 {
-        &self.origin
-    }
-}
 
 /// Holds information about the resulting image.
 struct Image {
@@ -75,37 +27,6 @@ impl Image {
             width,
             height: (width as f64 / aspect_ratio) as u32,
         }
-    }
-}
-
-/// Ray is a function in a form: `P(t) = A + tb`, where A is an origin, t is a parameter and
-/// b is a direction
-#[derive(Debug)]
-struct Ray {
-    origin: Vec3,
-    direction: Vec3,
-}
-
-impl Ray {
-    fn new(origin: Vec3, direction: Vec3) -> Ray {
-        Ray { origin, direction }
-    }
-
-    /// Get value of point `P(t) = A + direction * t`
-    fn at(&self, t: f64) -> Vec3 {
-        &self.origin + &(t * &self.direction)
-    }
-
-    fn unit_vector(&self) -> Vec3 {
-        &self.direction / self.direction.length()
-    }
-
-    fn direction(&self) -> Vec3 {
-        self.direction.clone()
-    }
-
-    fn origin(&self) -> Vec3 {
-        self.origin.clone()
     }
 }
 
@@ -228,7 +149,7 @@ fn calculate_image(camera_viewport: &Sensor, image: &Image, scene_objects: &Vec<
         let u: f64 = x as f64 / (image.width as f64 - 1.0);
         let v: f64 = (image.height as f64 - 1. - y as f64) / (image.height as f64 - 1.0);
 
-        let ray = calculate_ray(u, v, &camera_viewport);
+        let ray = camera_viewport.calculate_ray(u, v);
         let color = calculate_color(ray, &scene_objects);
         // Rgb is struct holding array of three elements
         *pixel = image::Rgb([color.r(), color.g(), color.b()]);
@@ -240,16 +161,6 @@ fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
     image_buffer.save("image.png").unwrap();
 }
 
-// The ray goes from origin to the pixel in the virtual viewport which is specified by offset
-// vectors `u` and `v`.
-fn calculate_ray(u: f64, v: f64, camera_viewport: &Sensor) -> Ray {
-    Ray::new(
-        camera_viewport.origin,
-        &(&camera_viewport.lower_left_corner + &(u as f64 * &camera_viewport.horizontal))
-            + &(v as f64 * &camera_viewport.vertical)
-            - camera_viewport.origin,
-    )
-}
 
 // If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
