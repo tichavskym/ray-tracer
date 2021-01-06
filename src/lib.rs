@@ -17,6 +17,7 @@ mod vec3;
 
 const INFINITY: f64 = f64::MAX;
 const SAMPLES_PER_PIXEL: u16 = 50; // Antialiasing
+const MAX_DEPTH: u16 = 10;
 
 /// Holds information about the resulting image.
 struct Image {
@@ -167,7 +168,7 @@ fn calculate_image(
                 / (image.height as f64 - 1.0);
 
             let ray = cam.calculate_ray(u, v);
-            let sample_color = calculate_color(ray, &scene_objects).as_fraction();
+            let sample_color = calculate_color(ray, &scene_objects, MAX_DEPTH).as_fraction();
             color.add_sample(sample_color);
         }
         color.combine_samples(SAMPLES_PER_PIXEL);
@@ -189,15 +190,19 @@ fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
 
 // If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
-fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>) -> Color {
+fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>, depth: u16) -> Color {
+    if depth <= 0 {
+        return Color::new(0, 0, 0);
+    }
+
     let mut rec: HitRecord = HitRecord::new();
     for s in shapes {
-        if s.hit(&ray, 0., 2000., &mut rec) {
-            let n = rec.normal;
-            // Transformation from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
-            return Color::from_fraction((n.x() + 1.) / 2., (n.y() + 1.) / 2., (n.z() + 1.) / 2.)
-            .unwrap();
-        } 
+        // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
+        if s.hit(&ray, 0.001, INFINITY, &mut rec) {
+            let target: Point = &(&rec.point + &rec.normal) + &(Vec3::random_unit_vector());
+            return 0.5
+                * calculate_color(Ray::new(rec.point, target - rec.point), shapes, depth - 1);
+        }
     }
     generate_background_color(ray)
 }

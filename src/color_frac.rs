@@ -29,10 +29,13 @@ impl Color {
     // the method is called, is expected to be sum of samples, and their number is parameter of
     // this method.
     pub fn combine_samples(&mut self, samples_per_pixel: u16) {
+        // Divide the color by the number of samples (scale) and gamma-correct for gamma=2.0 (sqrt).
         let scale = 1.0 / samples_per_pixel as f64;
-        self.r = self.r * scale;
-        self.g = self.g * scale;
-        self.b = self.b * scale;
+        self.r = (self.r * scale).sqrt();
+        self.g = (self.g * scale).sqrt();
+        self.b = (self.b * scale).sqrt();
+
+        // Write the translated [0,255] value of each color component.
         self.r = 256.0 * clamp(self.r, 0.0, 0.999);
         self.g = 256.0 * clamp(self.g, 0.0, 0.999);
         self.b = 256.0 * clamp(self.b, 0.0, 0.999);

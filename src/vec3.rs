@@ -1,3 +1,5 @@
+use rand::{thread_rng, Rng};
+
 // This struct will be used for 3D Points, Directions, ...
 #[derive(Clone, Copy, Debug)]
 pub struct Vec3 {
@@ -42,6 +44,35 @@ impl Vec3 {
     pub fn dot(v1: Vec3, v2: Vec3) -> f64 {
         v1.x() * v2.x() + v1.y() * v2.y() + v1.z() * v2.z()
     }
+
+    // Lambertian reflection, drop in replacement for `random_in_unit_sphere`,
+    // with distribution of cos x
+    pub fn random_unit_vector() -> Vec3 {
+        unit_vector(random_in_unit_sphere())
+    }
+}
+
+// Returns random vector, distribution cos^3 x
+fn random_in_unit_sphere() -> Vec3 {
+    loop {
+        let p = random(-1., 1.);
+        if p.length_squared() < 1. {
+            return p;
+        }
+    }
+}
+
+fn unit_vector(vec: Vec3) -> Vec3 {
+    vec / vec.length()
+}
+
+fn random(min: f64, max: f64) -> Vec3 {
+    let mut rng = thread_rng();
+    return Vec3 {
+        x: rng.gen_range(min..max),
+        y: rng.gen_range(min..max),
+        z: rng.gen_range(min..max),
+    };
 }
 
 /// Addition of two `&Vec3` structs. Implemented as adding each of the coordinates together.
