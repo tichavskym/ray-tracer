@@ -3,7 +3,6 @@ use rand::{thread_rng, Rng};
 
 use camera::Sensor;
 use color::Color;
-use color_frac::Color as FColor;
 use ray::Ray;
 use std::f64::consts::PI;
 use vec3::Vec3;
@@ -11,7 +10,6 @@ use vec3::Vec3 as Point;
 
 mod camera;
 mod color;
-mod color_frac;
 mod ray;
 mod vec3;
 
@@ -161,14 +159,14 @@ fn calculate_image(
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
         // Used for color sampling of the pixel.
-        let mut color = FColor::black();
+        let mut color = Color::black();
         for _ in 0..SAMPLES_PER_PIXEL {
             let u: f64 = (x as f64 + random_double()) / (image.width as f64 - 1.0);
             let v: f64 = (image.height as f64 - 1. - y as f64 + random_double())
                 / (image.height as f64 - 1.0);
 
             let ray = cam.calculate_ray(u, v);
-            let sample_color = calculate_color(ray, &scene_objects, MAX_DEPTH).as_fraction();
+            let sample_color = calculate_color(ray, &scene_objects, MAX_DEPTH);
             color.add_sample(sample_color);
         }
         color.combine_samples(SAMPLES_PER_PIXEL);
@@ -192,7 +190,7 @@ fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
 // point on sphere or background
 fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>, depth: u16) -> Color {
     if depth <= 0 {
-        return Color::new(0, 0, 0);
+        return Color::black();
     }
 
     let mut rec: HitRecord = HitRecord::new();
