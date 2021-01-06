@@ -6,6 +6,7 @@ use color::Color;
 use ray::Ray;
 use std::f64::consts::PI;
 use vec3::Vec3;
+// For better readability, making its own module would make things complicated
 use vec3::Vec3 as Point;
 
 mod camera;
@@ -70,8 +71,11 @@ impl HitRecord {
     }
 }
 
+// Every ray traced object should implement this trait
 trait Hittable {
-    /// Hit only counts if it's from interval (t_min, t_min).
+    // Return true if sphere and ray intersect; data about point closer to the camera are saved
+    // into `HitRecord` struct.
+    // Hit only counts if it's from interval (t_min, t_min).
     fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
@@ -88,7 +92,7 @@ impl Sphere {
 }
 
 impl Hittable for Sphere {
-    // Return true if sphere and ray intersect, data about point closer to the camera are saved
+    // Return true if sphere and ray intersect; data about point closer to the camera are saved
     // into `HitRecord` struct.
     //
     // There is a quadratic equation that describes spacial geometry containing ray and sphere.
@@ -198,7 +202,8 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>, depth: u16) -> Col
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
             let target: Point = &(&rec.point + &rec.normal) + &(Vec3::random_unit_vector());
-            return 0.5
+            let absorption_factor = 0.5; // TODO property of the material
+            return absorption_factor
                 * calculate_color(Ray::new(rec.point, target - rec.point), shapes, depth - 1);
         }
     }
