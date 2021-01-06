@@ -1,4 +1,5 @@
 use crate::vec3::Vec3;
+use crate::vec3::Vec3 as Point;
 
 /// Ray is a function in a form: `P(t) = A + tb`, where A is an origin, t is a parameter and
 /// b is a direction
@@ -9,12 +10,12 @@ pub struct Ray {
 }
 
 impl Ray {
-    pub fn new(origin: Vec3, direction: Vec3) -> Ray {
+    pub fn new(origin: Point, direction: Vec3) -> Ray {
         Ray { origin, direction }
     }
 
     /// Get value of point `P(t) = A + direction * t`
-    pub fn at(&self, t: f64) -> Vec3 {
+    pub fn at(&self, t: f64) -> Point {
         &self.origin + &(t * &self.direction)
     }
 
@@ -26,7 +27,7 @@ impl Ray {
         self.direction.clone()
     }
 
-    pub fn origin(&self) -> Vec3 {
+    pub fn origin(&self) -> Point {
         self.origin.clone()
     }
 }

@@ -1,20 +1,21 @@
 use crate::ray::Ray;
 use crate::vec3::Vec3;
+use crate::vec3::Vec3 as Point;
 
 /// Image sensor (imager) parameters:
 /// `Focal length` is a distance between projection plane to projection point (origin).
 /// `origin` and `lower_left_corner` together with `focal_length` give us spacial orientation of
 /// the virtual sensor.
 pub struct Sensor {
-    origin: Vec3,
+    origin: Point,
     horizontal: Vec3,
     vertical: Vec3,
-    lower_left_corner: Vec3,
+    lower_left_corner: Point,
 }
 
 impl Sensor {
     pub fn new(height: f64, aspect_ratio: f64, focal_length: f64) -> Sensor {
-        let origin = Vec3::zero();
+        let origin = Point::zero();
         let width = aspect_ratio * height;
         let horizontal = Vec3::new(width, 0., 0.);
         let vertical = Vec3::new(0., height, 0.);

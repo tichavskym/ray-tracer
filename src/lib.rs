@@ -38,7 +38,7 @@ impl Image {
 // Stores information about intersection of ray and the object.
 struct HitRecord {
     // Point of intersection.
-    point: Vec3,
+    point: Point,
     // Normal surface vector at the point of intersection.
     normal: Vec3,
     // Parameter that says where on the ray the intersection happend.
@@ -51,7 +51,7 @@ impl HitRecord {
     // Sets default values so that copiler is satisfied. SHOULD BE REWRITTEN if you wanna meaningfully use it.
     fn new() -> HitRecord {
         HitRecord {
-            point: Vec3::zero(),
+            point: Point::zero(),
             normal: Vec3::zero(),
             t: 0.0,
             front_face: true,
@@ -77,12 +77,12 @@ trait Hittable {
 
 // Represents ray traced object: sphere
 struct Sphere {
-    center: Vec3,
+    center: Point,
     radius: f64,
 }
 
 impl Sphere {
-    fn new(center: Vec3, radius: f64) -> Sphere {
+    fn new(center: Point, radius: f64) -> Sphere {
         Sphere { center, radius }
     }
 }
@@ -127,9 +127,9 @@ impl Hittable for Sphere {
 }
 
 fn set_scene_objects(objects: &mut Vec<Box<dyn Hittable>>) {
-    let sphere = Sphere::new(Vec3::new(0., 0., -1.), 0.5);
+    let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5);
     objects.push(Box::new(sphere));
-    let sphere = Sphere::new(Vec3::new(0., -100.5, -1.), 100.);
+    let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100.);
     objects.push(Box::new(sphere));
 }
 
