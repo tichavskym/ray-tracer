@@ -83,7 +83,7 @@ trait Material {
     // Return reflected ray, all necessary info is stored in `rec`
     fn scatter(&self, rec: &HitRecord) -> Ray;
     // Return absorption of the material as fraction
-    fn absorption(&self) -> f64;
+    fn absorption(&self) -> Color;
 }
 
 // Only one trait can be passed as an argument
@@ -92,11 +92,11 @@ trait TraceableObjects: Hittable + Material {}
 // Describes a material that is used to model diffused object surfaces
 struct Lambertian {
     // How much light is reflected (as fraction)
-    absorption: f64,
+    absorption: Color,
 }
 
 impl Lambertian {
-    fn new(absorption: f64) -> Lambertian {
+    fn new(absorption: Color) -> Lambertian {
         Lambertian { absorption }
     }
 }
@@ -115,8 +115,8 @@ impl Material for Lambertian {
         return new_ray;
     }
 
-    fn absorption(&self) -> f64 {
-        return self.absorption;
+    fn absorption(&self) -> Color {
+        return self.absorption.copy();
     }
 }
 
@@ -138,7 +138,7 @@ impl Material for Sphere {
         self.material.scatter(&rec)
     }
 
-    fn absorption(&self) -> f64 {
+    fn absorption(&self) -> Color {
         return self.material.absorption();
     }
 }
@@ -185,10 +185,10 @@ impl Hittable for Sphere {
 impl TraceableObjects for Sphere {}
 
 fn set_scene_objects(objects: &mut Vec<Box<dyn TraceableObjects>>) {
-    let diffused = Box::new(Lambertian::new(0.5));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.7, 0.7, 0.3).unwrap()));
     let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5, diffused);
     objects.push(Box::new(sphere));
-    let diffused = Box::new(Lambertian::new(0.5));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.9, 0.6, 0.1).unwrap()));
     let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100., diffused);
     objects.push(Box::new(sphere));
 }
