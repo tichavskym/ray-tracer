@@ -50,6 +50,12 @@ impl Vec3 {
     pub fn random_unit_vector() -> Vec3 {
         unit_vector(random_in_unit_sphere())
     }
+
+    // Return true if any of the vector components is near zero
+    pub fn near_zero(&self) -> bool {
+        let eps = 0.0000001;
+        return (self.x.abs() < eps) && (self.y.abs() < eps) && (self.z.abs() < eps);
+    }
 }
 
 // Returns random vector, distribution cos^3 x
