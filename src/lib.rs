@@ -82,8 +82,8 @@ trait Hittable {
 trait Material {
     // Return reflected ray, all necessary info is stored in `rec`
     fn scatter(&self, rec: &HitRecord) -> Ray;
-    // Return absorption of the material as fraction
-    fn absorption(&self) -> Color;
+    // Return color of the material
+    fn attenuation(&self) -> Color;
 }
 
 // Only one trait can be passed as an argument
@@ -92,12 +92,12 @@ trait TraceableObjects: Hittable + Material {}
 // Describes a material that is used to model diffused object surfaces
 struct Lambertian {
     // How much light is reflected (as fraction)
-    absorption: Color,
+    albedo: Color,
 }
 
 impl Lambertian {
-    fn new(absorption: Color) -> Lambertian {
-        Lambertian { absorption }
+    fn new(albedo: Color) -> Lambertian {
+        Lambertian { albedo }
     }
 }
 
@@ -115,8 +115,8 @@ impl Material for Lambertian {
         return new_ray;
     }
 
-    fn absorption(&self) -> Color {
-        return self.absorption.copy();
+    fn attenuation(&self) -> Color {
+        return self.albedo.copy();
     }
 }
 
@@ -138,8 +138,8 @@ impl Material for Sphere {
         self.material.scatter(&rec)
     }
 
-    fn absorption(&self) -> Color {
-        return self.material.absorption();
+    fn attenuation(&self) -> Color {
+        return self.material.attenuation();
     }
 }
 
@@ -258,7 +258,7 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
             let new_ray = s.scatter(&rec);
-            return s.absorption() * calculate_color(new_ray, shapes, depth - 1);
+            return s.attenuation() * calculate_color(new_ray, shapes, depth - 1);
         }
     }
     generate_background_color(ray)
