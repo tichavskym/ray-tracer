@@ -79,15 +79,60 @@ trait Hittable {
     fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
+trait Material {
+    // Return reflected ray, all necessary info is stored in `rec`
+    fn scatter(&self, rec: &HitRecord) -> Ray;
+    // Return absorption of the material as fraction
+    fn absorption(&self) -> f64;
+}
+
+// Only one trait can be passed as an argument
+trait TraceableObjects: Hittable + Material {}
+
+// Describes a material
+struct Diffuse {
+    absorption: f64,
+}
+
+impl Diffuse {
+    fn new(absorption: f64) -> Diffuse {
+        Diffuse { absorption }
+    }
+}
+
+impl Material for Diffuse {
+    fn scatter(&self, rec: &HitRecord) -> Ray {
+        // Random unit vector je vicemene chovani toho materialu
+        let target: Point = &(&rec.point + &rec.normal) + &(Vec3::random_unit_vector());
+        let new_ray = Ray::new(rec.point, target - rec.point);
+        return new_ray;
+    }
+
+    fn absorption(&self) -> f64 {
+        return self.absorption;
+    }
+}
+
 // Represents ray traced object: sphere
 struct Sphere {
     center: Point,
     radius: f64,
+    material: Box<dyn Material>,
 }
 
 impl Sphere {
-    fn new(center: Point, radius: f64) -> Sphere {
-        Sphere { center, radius }
+    fn new(center: Point, radius: f64, material: Box<dyn Material>) -> Sphere {
+        Sphere { center, radius, material }
+    }
+}
+
+impl Material for Sphere {
+    fn scatter(&self, rec: &HitRecord) -> Ray {
+        self.material.scatter(&rec)
+    }
+
+    fn absorption(&self) -> f64 {
+        return self.material.absorption();
     }
 }
 
@@ -130,10 +175,14 @@ impl Hittable for Sphere {
     }
 }
 
-fn set_scene_objects(objects: &mut Vec<Box<dyn Hittable>>) {
-    let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5);
+impl TraceableObjects for Sphere {}
+
+fn set_scene_objects(objects: &mut Vec<Box<dyn TraceableObjects>>) {
+    let diffused = Box::new(Diffuse::new(0.5));
+    let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5, diffused);
     objects.push(Box::new(sphere));
-    let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100.);
+    let diffused = Box::new(Diffuse::new(0.5));
+    let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100., diffused);
     objects.push(Box::new(sphere));
 }
 
@@ -141,7 +190,7 @@ pub fn run() {
     let image = Image::new(400, 16.0 / 9.0);
     let camera_viewport = Sensor::new(2.0, image.aspect_ratio, 1.0);
 
-    let mut scene_objects: Vec<Box<dyn Hittable>> = Vec::new();
+    let mut scene_objects: Vec<Box<dyn TraceableObjects>> = Vec::new();
     set_scene_objects(&mut scene_objects);
 
     let image_buffer = calculate_image(&camera_viewport, &image, &scene_objects);
@@ -158,7 +207,7 @@ pub fn run() {
 fn calculate_image(
     cam: &Sensor,
     image: &Image,
-    scene_objects: &Vec<Box<dyn Hittable>>,
+    scene_objects: &Vec<Box<dyn TraceableObjects>>,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
     for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
@@ -192,7 +241,7 @@ fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
 
 // If ray hits the sphere, return color based on the surface normal vector of the collision
 // point on sphere or background
-fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>, depth: u16) -> Color {
+fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16) -> Color {
     if depth <= 0 {
         return Color::black();
     }
@@ -201,10 +250,8 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn Hittable>>, depth: u16) -> Col
     for s in shapes {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
-            let target: Point = &(&rec.point + &rec.normal) + &(Vec3::random_unit_vector());
-            let absorption_factor = 0.5; // TODO property of the material
-            return absorption_factor
-                * calculate_color(Ray::new(rec.point, target - rec.point), shapes, depth - 1);
+            let new_ray = s.scatter(&rec);
+            return s.absorption() * calculate_color(new_ray, shapes, depth - 1);
         }
     }
     generate_background_color(ray)
