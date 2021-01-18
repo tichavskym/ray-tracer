@@ -122,12 +122,18 @@ impl Material for Lambertian {
 
 struct Metal {
     albedo: Color,
+    fuzz: f64,
 }
 
 impl Metal {
-    fn new(albedo: Color) -> Metal {
-        Metal { albedo }
+    fn fuzzy(albedo: Color, fuzz: f64) -> Metal {
+        let fuzz = if fuzz < 1. { fuzz } else { 1. }; 
+        Metal { albedo, fuzz }
     }
+
+    fn shiny(albedo: Color) -> Metal {
+        Metal { albedo, fuzz: 0. }
+    } 
 }
 
 // Reflect vector `v`, surface is given by `normal` vector
@@ -143,7 +149,7 @@ impl Material for Metal {
 
     fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray> {
         let reflected = reflect(ray_in.direction().unit_vector(), rec.normal);
-        let scattered = Ray::new(rec.point, reflected);
+        let scattered = Ray::new(rec.point, &reflected + &(self.fuzz * &Vec3::random_unit_vector()));
         if Vec3::dot(scattered.direction(), rec.normal) > 0. {
             Some(scattered)
         } else {
@@ -224,10 +230,10 @@ fn set_scene_objects(objects: &mut Vec<Box<dyn TraceableObjects>>) {
     let diffused = Box::new(Lambertian::new(Color::from_frac(0.7, 0.3, 0.3).unwrap()));
     let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5, diffused);
     objects.push(Box::new(sphere));
-    let metal = Box::new(Metal::new(Color::from_frac(0.8, 0.8, 0.8).unwrap()));
+    let metal = Box::new(Metal::fuzzy(Color::from_frac(0.8, 0.8, 0.8).unwrap(), 0.3));
     let sphere = Sphere::new(Point::new(-1., 0., -1.0), 0.5, metal);
     objects.push(Box::new(sphere));
-    let metal = Box::new(Metal::new(Color::from_frac(0.8, 0.6, 0.2).unwrap()));
+    let metal = Box::new(Metal::shiny(Color::from_frac(0.8, 0.6, 0.2).unwrap()));
     let sphere = Sphere::new(Point::new(1., 0., -1.0), 0.5, metal);
     objects.push(Box::new(sphere));
     let diffused = Box::new(Lambertian::new(Color::from_frac(0.8, 0.8, 0.0).unwrap()));
