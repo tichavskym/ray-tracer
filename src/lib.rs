@@ -3,14 +3,17 @@ use rand::{thread_rng, Rng};
 
 use camera::Sensor;
 use color::Color;
+use hit_record::HitRecord;
+use material::{Lambertian, Material, Metal};
 use ray::Ray;
 use std::f64::consts::PI;
 use vec3::Vec3;
-// For better readability, making its own module would make things complicated
-use vec3::Vec3 as Point;
+use vec3::Vec3 as Point; // For better understanding
 
 mod camera;
 mod color;
+mod hit_record;
+mod material;
 mod ray;
 mod vec3;
 
@@ -36,41 +39,6 @@ impl Image {
     }
 }
 
-// Stores information about intersection of ray and the object.
-struct HitRecord {
-    // Point of intersection.
-    point: Point,
-    // Normal surface vector at the point of intersection.
-    normal: Vec3,
-    // Parameter that says where on the ray the intersection happend.
-    t: f64,
-    // True means the ray hit the object from the outside, false from the inside.
-    front_face: bool,
-}
-
-impl HitRecord {
-    // Sets default values so that copiler is satisfied. SHOULD BE REWRITTEN if you wanna meaningfully use it.
-    fn new() -> HitRecord {
-        HitRecord {
-            point: Point::zero(),
-            normal: Vec3::zero(),
-            t: 0.0,
-            front_face: true,
-        }
-    }
-
-    // Set `front_face` and if it's false (ray is inside of the object), it makes
-    // the normal vector negative, so that it in the direction agains the ray.
-    fn set_face_normal(&mut self, ray: &Ray, outward_normal: Vec3) {
-        self.front_face = Vec3::dot(ray.direction(), outward_normal) > 0.0;
-        self.normal = if self.front_face {
-            outward_normal
-        } else {
-            -outward_normal
-        };
-    }
-}
-
 // Every ray traced object should implement this trait
 trait Hittable {
     // Return true if sphere and ray intersect; data about point closer to the camera are saved
@@ -79,84 +47,8 @@ trait Hittable {
     fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
-trait Material {
-    // Return reflected ray, all necessary info is stored in `rec`
-    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray>;
-    // Return color of the material
-    fn attenuation(&self) -> Color;
-}
-
 // Only one trait can be passed as an argument
 trait TraceableObjects: Hittable + Material {}
-
-// Describes a material that is used to model diffused object surfaces
-struct Lambertian {
-    // How much light is reflected (as fraction)
-    albedo: Color,
-}
-
-impl Lambertian {
-    fn new(albedo: Color) -> Lambertian {
-        Lambertian { albedo }
-    }
-}
-
-impl Material for Lambertian {
-    fn scatter(&self, rec: &HitRecord, _ray_in: &Ray) -> Option<Ray> {
-        // Random unit vector je vicemene chovani toho materialu
-        let mut direction = &rec.normal + &(Vec3::random_unit_vector());
-
-        // If one of the components was zero, it would cause computational problems
-        if direction.near_zero() {
-            direction = rec.normal;
-        }
-
-        let new_ray = Ray::new(rec.point, direction);
-        Some(new_ray)
-    }
-
-    fn attenuation(&self) -> Color {
-        return self.albedo.copy();
-    }
-}
-
-struct Metal {
-    albedo: Color,
-    fuzz: f64,
-}
-
-impl Metal {
-    fn fuzzy(albedo: Color, fuzz: f64) -> Metal {
-        let fuzz = if fuzz < 1. { fuzz } else { 1. }; 
-        Metal { albedo, fuzz }
-    }
-
-    fn shiny(albedo: Color) -> Metal {
-        Metal { albedo, fuzz: 0. }
-    } 
-}
-
-// Reflect vector `v`, surface is given by `normal` vector
-fn reflect(v: Vec3, normal: Vec3) -> Vec3 {
-    let b = Vec3::dot(v, normal);
-    v - 2. * b * &normal
-}
-
-impl Material for Metal {
-    fn attenuation(&self) -> Color {
-        return self.albedo.copy();
-    }
-
-    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray> {
-        let reflected = reflect(ray_in.direction().unit_vector(), rec.normal);
-        let scattered = Ray::new(rec.point, &reflected + &(self.fuzz * &Vec3::random_unit_vector()));
-        if Vec3::dot(scattered.direction(), rec.normal) > 0. {
-            Some(scattered)
-        } else {
-            None
-        }
-    }
-}
 
 // Represents ray traced object: sphere
 struct Sphere {
@@ -306,11 +198,11 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
             let new_ray = s.scatter(&rec, &ray);
-            if new_ray.is_some() {
-                return s.attenuation() * calculate_color(new_ray.unwrap(), shapes, depth - 1);
+            return if new_ray.is_some() {
+                s.attenuation() * calculate_color(new_ray.unwrap(), shapes, depth - 1)
             } else {
-                return Color::black();
-            }
+                Color::black()
+            };
         }
     }
     generate_background_color(ray)
