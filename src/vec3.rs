@@ -56,6 +56,10 @@ impl Vec3 {
         let eps = 0.0000001;
         return (self.x.abs() < eps) && (self.y.abs() < eps) && (self.z.abs() < eps);
     }
+
+    pub fn unit_vector(&self) -> Vec3 {
+        self / self.length()
+    }
 }
 
 // Returns random vector, distribution cos^3 x

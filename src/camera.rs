@@ -3,9 +3,9 @@ use crate::vec3::Vec3;
 use crate::vec3::Vec3 as Point;
 
 /// Image sensor (imager) parameters:
-/// `Focal length` is a distance between projection plane to projection point (origin).
-/// `origin` and `lower_left_corner` together with `focal_length` give us spacial orientation of
-/// the virtual sensor.
+/// * `focal length` is a distance between projection plane to projection point (origin),
+/// * `origin` and `lower_left_corner` together with `focal_length` determine a spacial orientation of
+/// a virtual sensor.
 pub struct Sensor {
     origin: Point,
     horizontal: Vec3,
@@ -31,8 +31,8 @@ impl Sensor {
         }
     }
 
-    // The ray goes from origin to the pixel in the virtual viewport which is specified by offset
-    // vectors `u` and `v`.
+    /// Creates a new ray going from the origin through the virtual viewport pixel, which is given
+    /// by offset vectors `u` and `v`.
     pub fn calculate_ray(&self, u: f64, v: f64) -> Ray {
         Ray::new(
             self.origin,

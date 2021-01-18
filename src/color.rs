@@ -13,7 +13,7 @@ impl Color {
         }
     }
 
-    // Returns None if any of the arguments is larger han 1
+    /// Returns `None` if any of the arguments is larger than 1
     pub fn from_frac(r: f64, g: f64, b: f64) -> Option<Color> {
         if r > 1. || r < 0. || g > 1. || g < 0. || b > 1. || b < 0. {
             None
@@ -22,7 +22,7 @@ impl Color {
         }
     }
 
-    // All fields are set to value 0.0
+    /// All fields are set to value 0.0
     pub fn black() -> Color {
         Color {
             r: 0.0,
@@ -31,27 +31,26 @@ impl Color {
         }
     }
 
-    // This method is used for antialiasing of individual pixel together with `black()` and
-    // `combine_samples()` methods. It adds tuple components to corresponding components of `Color`,
-    // without checking for overflow. You can therefore end up with Color fields that don't make
-    // sense.
+    /// Adds colors without checking overflow. Therefore, the resulting color does not have to make
+    /// sense.
     pub fn add_sample(&mut self, color: Color) {
         self.r += color.r;
         self.g += color.g;
         self.b += color.b;
     }
 
-    // Makes the calculation of "white noise" antialiasing of the pixel. `Color`, on which
-    // the method is called, is expected to be sum of samples, and their number is parameter of
-    // this method.
-    pub fn combine_samples(&mut self, samples_per_pixel: u16) {
-        // Divide the color by the number of samples (scale) and gamma-correct for gamma=2.0 (sqrt).
-        let scale = 1.0 / samples_per_pixel as f64;
+    /// Combines samples to get final color of the pixel using "white noise" method.
+    ///
+    /// `Color` on which the method is called, is expected to be sum of samples (how many of them is
+    /// given by parameter `samples`).
+    pub fn combine_samples(&mut self, samples: u16) {
+        // Scale and gamma-correct for gamma=2.0 (sqrt).
+        let scale = 1.0 / samples as f64;
         self.r = (self.r * scale).sqrt();
         self.g = (self.g * scale).sqrt();
         self.b = (self.b * scale).sqrt();
 
-        // Write the translated [0,255] value of each color component.
+        // Transform each component to [0,255] range
         self.r = 256.0 * clamp(self.r, 0.0, 0.999);
         self.g = 256.0 * clamp(self.g, 0.0, 0.999);
         self.b = 256.0 * clamp(self.b, 0.0, 0.999);
@@ -78,7 +77,7 @@ impl Color {
     }
 }
 
-// Clamp value x to the range [min, max]
+/// Clamp value x to the range [min, max]
 fn clamp(x: f64, min: f64, max: f64) -> f64 {
     if x < min {
         return min;
@@ -103,7 +102,7 @@ impl std::ops::Mul<Color> for f64 {
 
 impl std::ops::Mul<Color> for Color {
     type Output = Color;
-    fn mul(self, rhs: Color) -> Color{
+    fn mul(self, rhs: Color) -> Color {
         Color {
             r: (self.r * rhs.r),
             g: (self.g * rhs.g),
@@ -117,9 +116,9 @@ impl std::ops::Add for Color {
 
     fn add(self, rhs: Self) -> Color {
         Color {
-            r: &self.r + rhs.r,
-            g: &self.g + rhs.g,
-            b: &self.b + rhs.b,
+            r: self.r + rhs.r,
+            g: self.g + rhs.g,
+            b: self.b + rhs.b,
         }
     }
 }

@@ -81,7 +81,7 @@ trait Hittable {
 
 trait Material {
     // Return reflected ray, all necessary info is stored in `rec`
-    fn scatter(&self, rec: &HitRecord) -> Ray;
+    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray>;
     // Return color of the material
     fn attenuation(&self) -> Color;
 }
@@ -102,7 +102,7 @@ impl Lambertian {
 }
 
 impl Material for Lambertian {
-    fn scatter(&self, rec: &HitRecord) -> Ray {
+    fn scatter(&self, rec: &HitRecord, _ray_in: &Ray) -> Option<Ray> {
         // Random unit vector je vicemene chovani toho materialu
         let mut direction = &rec.normal + &(Vec3::random_unit_vector());
 
@@ -112,11 +112,43 @@ impl Material for Lambertian {
         }
 
         let new_ray = Ray::new(rec.point, direction);
-        return new_ray;
+        Some(new_ray)
     }
 
     fn attenuation(&self) -> Color {
         return self.albedo.copy();
+    }
+}
+
+struct Metal {
+    albedo: Color,
+}
+
+impl Metal {
+    fn new(albedo: Color) -> Metal {
+        Metal { albedo }
+    }
+}
+
+// Reflect vector `v`, surface is given by `normal` vector
+fn reflect(v: Vec3, normal: Vec3) -> Vec3 {
+    let b = Vec3::dot(v, normal);
+    v - 2. * b * &normal
+}
+
+impl Material for Metal {
+    fn attenuation(&self) -> Color {
+        return self.albedo.copy();
+    }
+
+    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray> {
+        let reflected = reflect(ray_in.direction().unit_vector(), rec.normal);
+        let scattered = Ray::new(rec.point, reflected);
+        if Vec3::dot(scattered.direction(), rec.normal) > 0. {
+            Some(scattered)
+        } else {
+            None
+        }
     }
 }
 
@@ -129,13 +161,17 @@ struct Sphere {
 
 impl Sphere {
     fn new(center: Point, radius: f64, material: Box<dyn Material>) -> Sphere {
-        Sphere { center, radius, material }
+        Sphere {
+            center,
+            radius,
+            material,
+        }
     }
 }
 
 impl Material for Sphere {
-    fn scatter(&self, rec: &HitRecord) -> Ray {
-        self.material.scatter(&rec)
+    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray> {
+        self.material.scatter(&rec, ray_in)
     }
 
     fn attenuation(&self) -> Color {
@@ -185,10 +221,16 @@ impl Hittable for Sphere {
 impl TraceableObjects for Sphere {}
 
 fn set_scene_objects(objects: &mut Vec<Box<dyn TraceableObjects>>) {
-    let diffused = Box::new(Lambertian::new(Color::from_frac(0.7, 0.7, 0.3).unwrap()));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.7, 0.3, 0.3).unwrap()));
     let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5, diffused);
     objects.push(Box::new(sphere));
-    let diffused = Box::new(Lambertian::new(Color::from_frac(0.9, 0.6, 0.1).unwrap()));
+    let metal = Box::new(Metal::new(Color::from_frac(0.8, 0.8, 0.8).unwrap()));
+    let sphere = Sphere::new(Point::new(-1., 0., -1.0), 0.5, metal);
+    objects.push(Box::new(sphere));
+    let metal = Box::new(Metal::new(Color::from_frac(0.8, 0.6, 0.2).unwrap()));
+    let sphere = Sphere::new(Point::new(1., 0., -1.0), 0.5, metal);
+    objects.push(Box::new(sphere));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.8, 0.8, 0.0).unwrap()));
     let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100., diffused);
     objects.push(Box::new(sphere));
 }
@@ -257,8 +299,12 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16
     for s in shapes {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
-            let new_ray = s.scatter(&rec);
-            return s.attenuation() * calculate_color(new_ray, shapes, depth - 1);
+            let new_ray = s.scatter(&rec, &ray);
+            if new_ray.is_some() {
+                return s.attenuation() * calculate_color(new_ray.unwrap(), shapes, depth - 1);
+            } else {
+                return Color::black();
+            }
         }
     }
     generate_background_color(ray)
