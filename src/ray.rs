@@ -16,18 +16,18 @@ impl Ray {
 
     /// Get value of point `P(t) = A + direction * t`
     pub fn at(&self, t: f64) -> Point {
-        &self.origin + &(t * &self.direction)
+        self.origin + t * &self.direction
     }
 
     pub fn unit_vector(&self) -> Vec3 {
-        &self.direction / self.direction.length()
+        self.direction / self.direction.length()
     }
 
     pub fn direction(&self) -> Vec3 {
-        self.direction.clone()
+        self.direction
     }
 
     pub fn origin(&self) -> Point {
-        self.origin.clone()
+        self.origin
     }
 }

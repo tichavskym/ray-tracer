@@ -24,9 +24,9 @@ impl Sensor {
             origin,
             horizontal,
             vertical,
-            lower_left_corner: &origin
-                - &(&horizontal / 2.0)
-                - &vertical / 2.0
+            lower_left_corner: origin
+                - horizontal / 2.0
+                - vertical / 2.0
                 - Vec3::new(0., 0., focal_length),
         }
     }
@@ -36,8 +36,7 @@ impl Sensor {
     pub fn calculate_ray(&self, u: f64, v: f64) -> Ray {
         Ray::new(
             self.origin,
-            &(&self.lower_left_corner + &(u as f64 * &self.horizontal))
-                + &(v as f64 * &self.vertical)
+            (self.lower_left_corner + (u as f64 * &self.horizontal)) + (v as f64 * &self.vertical)
                 - self.origin,
         )
     }
