@@ -1,10 +1,12 @@
+use std::marker::{Send, Sync};
+
 use crate::color::Color;
 use crate::hit_record::HitRecord;
 use crate::ray::Ray;
 use crate::vec3::Vec3;
 
-pub trait Material {
-    // Return reflected ray, all necessary info is stored in `rec`
+pub trait Material: Send + Sync {
+    /// Returns reflected ray and stores all necessary info about intersection into `rec`.
     fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray>;
     /// Returns color of the material
     fn attenuation(&self) -> Color;

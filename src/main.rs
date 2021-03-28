@@ -1,6 +1,7 @@
+use env_logger::Env;
 use ray_tracing::run;
 
-/// This is an implementation of the Ray Tracing In One Weekend book by Peter Shirley
 fn main() {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     run();
 }

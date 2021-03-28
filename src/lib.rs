@@ -1,200 +1,173 @@
 use image::{ImageBuffer, Rgb};
 use rand::{thread_rng, Rng};
+use std::sync::{mpsc, Arc};
 
 use camera::Sensor;
 use color::Color;
 use hit_record::HitRecord;
 use material::{Lambertian, Material, Metal};
+use objects::Sphere;
 use ray::Ray;
-use std::f64::consts::PI;
+use std::ops::Deref;
+use thread_pool::ThreadPool;
 use vec3::Vec3;
-use vec3::Vec3 as Point; // For better understanding
+use vec3::Vec3 as Point; // For better understanding of the code
 
 mod camera;
 mod color;
 mod hit_record;
 mod material;
+mod objects;
 mod ray;
+mod thread_pool;
 mod vec3;
 
 const INFINITY: f64 = f64::MAX;
-const SAMPLES_PER_PIXEL: u16 = 50; // Antialiasing
-const MAX_DEPTH: u16 = 10;
 
-/// Holds information about the resulting image.
+/// Supersampling anti-aliasing parameter
+const SAMPLES_PER_PIXEL: u16 = 16;
+/// Upper limit for ray reflections
+const MAX_DEPTH: u16 = 10;
+const THREAD_COUNT: u8 = 8;
+const OUTPUT_FILE_NAME: &str = "image.png";
+
+const IMAGE_WIDTH: u32 = 1920;
+const IMAGE_ASPECT_RATIO: f64 = 16.0 / 9.0;
+const CAM_FOCAL_LENGTH: f64 = 1.0;
+const CAM_HEIGHT: f64 = 2.0;
+
+/// Holds information about dimensions of the resulting image.
 struct Image {
-    aspect_ratio: f64,
     width: u32,
     height: u32,
 }
 
 impl Image {
     fn new(width: u32, aspect_ratio: f64) -> Image {
-        let aspect_ratio = aspect_ratio;
         Image {
-            aspect_ratio,
             width,
             height: (width as f64 / aspect_ratio) as u32,
         }
     }
 }
 
-// Every ray traced object should implement this trait
+/// Trait implemented by every ray traced object
 trait Hittable {
-    // Return true if sphere and ray intersect; data about point closer to the camera are saved
-    // into `HitRecord` struct.
-    // Hit only counts if it's from interval (t_min, t_min).
+    /// Returns `true` if the object and ray intersect. Data about intersection point closer to the
+    /// camera are saved into `HitRecord` struct. Intersection point is calculated only on interval
+    /// (t_min, t_man).
     fn hit(&self, r: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool;
 }
 
-// Only one trait can be passed as an argument
 trait TraceableObjects: Hittable + Material {}
 
-// Represents ray traced object: sphere
-struct Sphere {
-    center: Point,
-    radius: f64,
-    material: Box<dyn Material>,
-}
-
-impl Sphere {
-    fn new(center: Point, radius: f64, material: Box<dyn Material>) -> Sphere {
-        Sphere {
-            center,
-            radius,
-            material,
-        }
-    }
-}
-
-impl Material for Sphere {
-    fn scatter(&self, rec: &HitRecord, ray_in: &Ray) -> Option<Ray> {
-        self.material.scatter(&rec, ray_in)
-    }
-
-    fn attenuation(&self) -> Color {
-        return self.material.attenuation();
-    }
-}
-
-impl Hittable for Sphere {
-    // Return true if sphere and ray intersect; data about point closer to the camera are saved
-    // into `HitRecord` struct.
-    //
-    // There is a quadratic equation that describes spacial geometry containing ray and sphere.
-    // If the equation has one (discriminant = 0) or two roots (discr > 0), the ray touches or
-    // intersects the sphere, respectively. The exact equation and
-    // more thorough explanation can be found at:
-    // https://raytracing.github.io/books/RayTracingInOneWeekend.html#addingasphere
-    //
-    // We're not interested in one root, bcs the ray would most likely reflect somewhere else.
-    fn hit(&self, ray: &Ray, t_min: f64, t_max: f64, rec: &mut HitRecord) -> bool {
-        // oc = line segment between origin and center
-        let oc = ray.origin() - self.center;
-        let a = Vec3::dot(ray.direction(), ray.direction());
-        let b = 2.0 * Vec3::dot(ray.direction(), oc);
-        let c = Vec3::dot(oc, oc) - self.radius * self.radius;
-
-        let discriminant = b * b - 4. * a * c;
-        if discriminant < 0.0 {
-            return false;
-        }
-
-        let mut root = (-b - discriminant.sqrt()) / (2.0 * a);
-        if root < t_min || t_max < root {
-            root = (-b + discriminant.sqrt()) / (2.0 * a);
-            if root < t_min || t_max < root {
-                return false;
-            }
-        }
-
-        rec.t = root;
-        rec.point = ray.at(rec.t);
-        rec.normal = (rec.point - self.center) / self.radius;
-
-        return true;
-    }
-}
-
-impl TraceableObjects for Sphere {}
-
 fn set_scene_objects(objects: &mut Vec<Box<dyn TraceableObjects>>) {
-    let diffused = Box::new(Lambertian::new(Color::from_frac(0.7, 0.3, 0.3).unwrap()));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.8, 0.2, 0.2).unwrap()));
     let sphere = Sphere::new(Point::new(0., 0., -1.), 0.5, diffused);
     objects.push(Box::new(sphere));
     let metal = Box::new(Metal::fuzzy(Color::from_frac(0.8, 0.8, 0.8).unwrap(), 0.3));
     let sphere = Sphere::new(Point::new(-1., 0., -1.0), 0.5, metal);
     objects.push(Box::new(sphere));
-    let metal = Box::new(Metal::shiny(Color::from_frac(0.8, 0.6, 0.2).unwrap()));
+    let metal = Box::new(Metal::shiny(Color::from_frac(0.5, 0.6, 0.6).unwrap()));
     let sphere = Sphere::new(Point::new(1., 0., -1.0), 0.5, metal);
     objects.push(Box::new(sphere));
-    let diffused = Box::new(Lambertian::new(Color::from_frac(0.8, 0.8, 0.0).unwrap()));
+    let diffused = Box::new(Lambertian::new(Color::from_frac(0.05, 0.5, 0.05).unwrap()));
     let sphere = Sphere::new(Point::new(0., -100.5, -1.), 100., diffused);
     objects.push(Box::new(sphere));
 }
 
 pub fn run() {
-    let image = Image::new(400, 16.0 / 9.0);
-    let camera_viewport = Sensor::new(2.0, image.aspect_ratio, 1.0);
+    let image = Image::new(IMAGE_WIDTH, IMAGE_ASPECT_RATIO);
+    let camera_viewport = Sensor::new(CAM_HEIGHT, IMAGE_ASPECT_RATIO, CAM_FOCAL_LENGTH);
 
     let mut scene_objects: Vec<Box<dyn TraceableObjects>> = Vec::new();
     set_scene_objects(&mut scene_objects);
 
-    let image_buffer = calculate_image(&camera_viewport, &image, &scene_objects);
-    save_image(&image_buffer);
+    let image_buffer = calculate_image(camera_viewport, image, scene_objects);
+    save_image(&image_buffer, OUTPUT_FILE_NAME);
 }
 
-// Iterate over every pixel in the image, use two offset vectors `u` and `v` to convert
-// the image pixel location to a fraction from 0 to 1, so that we can use them when
-// creating the ray which gets calculated from the virtual viewport location
-// of a pixel (virtual viewport is later scaled and saved as the image).
-// The color of each pixel is computed multiple times (SAMPLES_PER_PIXEL times, every time with
-// random deviation) so that we get "white noise" and aliased picture is created. All of the colors
-// are added and then mathematically transformed into final color of the pixel.
+/// Iterates over every pixel in the image, calculates its color and returns the resulting image.
+/// The whole computation is done in parallel (`THREAD_COUNT` constant).
 fn calculate_image(
-    cam: &Sensor,
-    image: &Image,
-    scene_objects: &Vec<Box<dyn TraceableObjects>>,
+    cam: Sensor,
+    image: Image,
+    scene_objects: Vec<Box<dyn TraceableObjects + 'static>>,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let mut image_buffer = image::ImageBuffer::new(image.width, image.height);
-    for (x, y, pixel) in image_buffer.enumerate_pixels_mut() {
-        // Used for color sampling of the pixel.
-        let mut color = Color::black();
-        for _ in 0..SAMPLES_PER_PIXEL {
-            let u: f64 = (x as f64 + random_double()) / (image.width as f64 - 1.0);
-            let v: f64 = (image.height as f64 - 1. - y as f64 + random_double())
-                / (image.height as f64 - 1.0);
+    let pool = ThreadPool::new(THREAD_COUNT).unwrap();
+    // Channel for transmitting results back to the main thread
+    let (sender, receiver) = mpsc::channel();
 
-            let ray = cam.calculate_ray(u, v);
-            let sample_color = calculate_color(ray, &scene_objects, MAX_DEPTH);
-            color.add_sample(sample_color);
-        }
-        color.combine_samples(SAMPLES_PER_PIXEL);
-        // Rgb is struct holding array of three elements
-        *pixel = image::Rgb(color.get_u8());
+    // Every thread needs to own this data
+    let cam = Arc::new(cam);
+    let image = Arc::new(image);
+    let scene_objects = Arc::new(scene_objects);
+
+    // `h` and `w` give us location of the pixel in the image
+    for h in 0..image.height {
+        let cam_clone = cam.clone();
+        let image_clone = image.clone();
+        let scene_objects_clone = scene_objects.clone();
+        let sender_clone = sender.clone();
+
+        pool.execute(move || {
+            for w in 0..image_clone.width {
+                let color = get_pixel_color(&cam_clone, &image_clone, &scene_objects_clone, h, w);
+                let image_color = image::Rgb(color.get_u8());
+
+                let tuple = (w, h, image_color);
+                sender_clone.send(tuple).unwrap();
+            }
+            log::info!("Finished rendering of line {}", h);
+        });
     }
+    // The original value has to be dropped, so that the receiving for loop below ends after all
+    // threads finish their work.
+    std::mem::drop(sender);
+
+    for incoming in receiver {
+        let (w, h, image_color) = incoming;
+        image_buffer.put_pixel(w, h, image_color);
+    }
+
     image_buffer
 }
 
-// Returns random number in range from 0.0 (included) to 1.0 (excluded)
-fn random_double() -> f64 {
-    let mut rng = thread_rng();
-    rng.gen_range(0.0..1.0)
+/// Computes color of the pixel at coordinates `w` and `h`. Uses two offset vectors `u` and `v` to convert
+/// the image pixel location to a fraction from 0 to 1 (used with virtual viewport for ray calculation).
+///
+/// Uses Supersampling anti-aliasing with random algorithm (stochastic sampling).
+fn get_pixel_color(
+    cam_clone: &Arc<Sensor>,
+    image_clone: &Arc<Image>,
+    scene_objects_clone: &Arc<Vec<Box<dyn TraceableObjects>>>,
+    h: u32,
+    w: u32,
+) -> Color {
+    let mut color = Color::black();
+    for _ in 0..SAMPLES_PER_PIXEL {
+        let u: f64 = (w as f64 + random_double()) / (image_clone.width as f64 - 1.0);
+        let v: f64 = (image_clone.height as f64 - 1. - h as f64 + random_double())
+            / (image_clone.height as f64 - 1.0);
+
+        let ray = cam_clone.calculate_ray(u, v);
+        let sample_color = calculate_color(ray, scene_objects_clone, MAX_DEPTH);
+        color.add_sample(sample_color);
+    }
+    color.combine_samples(SAMPLES_PER_PIXEL);
+    color
 }
 
-fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>) {
-    image_buffer.save("image.png").unwrap();
-}
-
-// If ray hits the sphere, return color based on the surface normal vector of the collision
-// point on sphere or background
-fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16) -> Color {
-    if depth <= 0 {
+/// This returns color based on the surface normal vector at the collision point with an object (or
+/// multiple collisions) or background color.
+fn calculate_color(ray: Ray, shapes: &Arc<Vec<Box<dyn TraceableObjects>>>, depth: u16) -> Color {
+    if depth == 0 {
         return Color::black();
     }
 
     let mut rec: HitRecord = HitRecord::new();
-    for s in shapes {
+    for s in shapes.deref() {
         // https://raytracing.github.io/books/RayTracingInOneWeekend.html#diffusematerials/
         if s.hit(&ray, 0.001, INFINITY, &mut rec) {
             let new_ray = s.scatter(&rec, &ray);
@@ -205,22 +178,28 @@ fn calculate_color(ray: Ray, shapes: &Vec<Box<dyn TraceableObjects>>, depth: u16
             };
         }
     }
-    generate_background_color(ray)
+    linearly_blend_colors(ray, Color::white(), Color::blue())
 }
 
-// Linearly blend white and blue depending on the y coordinate. Because we normalize the vector
-// (we transform it to the unit vector), it changes shade even based on the x coordinate (as we
-// change value of y, the value of x has to change too).
-fn generate_background_color(r: Ray) -> Color {
+/// Returns linearly blended color depending on the ray coordinates.
+fn linearly_blend_colors(r: Ray, start_value: Color, end_value: Color) -> Color {
+    // Normalizing the vector => as value of y changes, the value of x has to change too =>
+    // resulting color is dependent on both coordinates
     let unit_direction: Vec3 = r.unit_vector();
 
-    // from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
+    // Transform from ( -1.0 ... 1.0) to ( 0.0 ... 1.0)
     let t = 0.5 * (unit_direction.y() + 1.0);
 
-    // blendedValue = ( 1.0 - t ) startValue + t * endValue
-    (1.0 - t) * Color::white() + t * Color::blue()
+    // blended_value = ( 1.0 - t ) start_value + t * end_value
+    (1.0 - t) * start_value + t * end_value
 }
 
-fn degrees_to_radians(degrees: f64) -> f64 {
-    degrees * PI / 180.0
+/// Returns random number in range from 0.0 (included) to 1.0 (excluded)
+fn random_double() -> f64 {
+    let mut rng = thread_rng();
+    rng.gen_range(0.0..1.0)
+}
+
+fn save_image(image_buffer: &ImageBuffer<Rgb<u8>, Vec<u8>>, filename: &str) {
+    image_buffer.save(filename).unwrap();
 }
