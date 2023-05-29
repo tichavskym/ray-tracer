@@ -8,6 +8,10 @@ Peter Shirley.
 This program supports multi-threading using modified thread pool from [Rust
 book](https://doc.rust-lang.org/stable/book/ch20-02-multithreaded.html).
 
+![An example of a generated scene](image.png)
+
+*An example of a generated scene*
+
 ## Usage
 
 *It is still WIP and not user-friendly yet.*
